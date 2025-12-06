@@ -1,11 +1,23 @@
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "~> 2.7"
+    }
+    random = {
+      source = "hashicorp/random"
+      version = "~> 2.1"
+    }
+  }
+}
+
 provider "aws" {
-  region  = "${var.region}"
-  version = "~> 2.7"
+  region  = var.region
   profile = var.profile
 }
 
 provider "random" {
-  version = "~> 2.1"
+
 }
 
 variable "public_key_path" {
@@ -34,11 +46,11 @@ variable "ami" {}
 variable "profile" {}
 
 variable "instance_types" {
-  type = "map"
+  type = map(string)
 }
 
 variable "num_instances" {
-  type = "map"
+  type = map(string)
 }
 
 # Create a VPC to launch our instances into
@@ -67,7 +79,7 @@ resource "aws_subnet" "benchmark_subnet" {
   vpc_id                  = "${aws_vpc.benchmark_vpc.id}"
   cidr_block              = "10.0.0.0/24"
   map_public_ip_on_launch = true
-  availability_zone       = "us-west-2b"
+  availability_zone       = "eu-central-1b"
 }
 
 # Get public IP of this machine

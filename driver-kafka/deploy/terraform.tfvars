@@ -1,6 +1,6 @@
 public_key_path = "~/.ssh/kafka_aws.pub"
-region          = "us-west-2"
-ami             = "ami-9fa343e7" // RHEL-7.4
+region          = "eu-central-1"
+ami             = "ami-0303209bd70dc2f0d" // RHEL-9.7
 profile         = "default"
 
 instance_types = {
