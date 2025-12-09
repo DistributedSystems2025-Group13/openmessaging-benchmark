@@ -1,11 +1,11 @@
 terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
       version = "~> 2.7"
     }
     random = {
-      source = "hashicorp/random"
+      source  = "hashicorp/random"
       version = "~> 2.1"
     }
   }
@@ -64,19 +64,19 @@ resource "aws_vpc" "benchmark_vpc" {
 
 # Create an internet gateway to give our subnet access to the outside world
 resource "aws_internet_gateway" "kafka" {
-  vpc_id = "${aws_vpc.benchmark_vpc.id}"
+  vpc_id = aws_vpc.benchmark_vpc.id
 }
 
 # Grant the VPC internet access on its main route table
 resource "aws_route" "internet_access" {
-  route_table_id         = "${aws_vpc.benchmark_vpc.main_route_table_id}"
+  route_table_id         = aws_vpc.benchmark_vpc.main_route_table_id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = "${aws_internet_gateway.kafka.id}"
+  gateway_id             = aws_internet_gateway.kafka.id
 }
 
 # Create a subnet to launch our instances into
 resource "aws_subnet" "benchmark_subnet" {
-  vpc_id                  = "${aws_vpc.benchmark_vpc.id}"
+  vpc_id                  = aws_vpc.benchmark_vpc.id
   cidr_block              = "10.0.0.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "eu-central-1b"
@@ -89,7 +89,7 @@ data "http" "myip" {
 
 resource "aws_security_group" "benchmark_security_group" {
   name   = "terraform-kafka-${random_id.hash.hex}"
-  vpc_id = "${aws_vpc.benchmark_vpc.id}"
+  vpc_id = aws_vpc.benchmark_vpc.id
 
   # SSH access from anywhere
   # ingress {
@@ -144,16 +144,16 @@ resource "aws_security_group" "benchmark_security_group" {
 
 resource "aws_key_pair" "auth" {
   key_name   = "${var.key_name}-${random_id.hash.hex}"
-  public_key = "${file(var.public_key_path)}"
+  public_key = file(var.public_key_path)
 }
 
 resource "aws_instance" "zookeeper" {
-  ami                    = "${var.ami}"
-  instance_type          = "${var.instance_types["zookeeper"]}"
-  key_name               = "${aws_key_pair.auth.id}"
-  subnet_id              = "${aws_subnet.benchmark_subnet.id}"
+  ami                    = var.ami
+  instance_type          = var.instance_types["zookeeper"]
+  key_name               = aws_key_pair.auth.id
+  subnet_id              = aws_subnet.benchmark_subnet.id
   vpc_security_group_ids = ["${aws_security_group.benchmark_security_group.id}"]
-  count                  = "${var.num_instances["zookeeper"]}"
+  count                  = var.num_instances["zookeeper"]
   monitoring             = true
 
   tags = {
@@ -162,12 +162,12 @@ resource "aws_instance" "zookeeper" {
 }
 
 resource "aws_instance" "kafka" {
-  ami                    = "${var.ami}"
-  instance_type          = "${var.instance_types["kafka"]}"
-  key_name               = "${aws_key_pair.auth.id}"
-  subnet_id              = "${aws_subnet.benchmark_subnet.id}"
+  ami                    = var.ami
+  instance_type          = var.instance_types["kafka"]
+  key_name               = aws_key_pair.auth.id
+  subnet_id              = aws_subnet.benchmark_subnet.id
   vpc_security_group_ids = ["${aws_security_group.benchmark_security_group.id}"]
-  count                  = "${var.num_instances["kafka"]}"
+  count                  = var.num_instances["kafka"]
   monitoring             = true
 
   tags = {
@@ -176,12 +176,12 @@ resource "aws_instance" "kafka" {
 }
 
 resource "aws_instance" "client" {
-  ami                    = "${var.ami}"
-  instance_type          = "${var.instance_types["client"]}"
-  key_name               = "${aws_key_pair.auth.id}"
-  subnet_id              = "${aws_subnet.benchmark_subnet.id}"
+  ami                    = var.ami
+  instance_type          = var.instance_types["client"]
+  key_name               = aws_key_pair.auth.id
+  subnet_id              = aws_subnet.benchmark_subnet.id
   vpc_security_group_ids = ["${aws_security_group.benchmark_security_group.id}"]
-  count                  = "${var.num_instances["client"]}"
+  count                  = var.num_instances["client"]
   monitoring             = true
 
   tags = {
@@ -190,12 +190,12 @@ resource "aws_instance" "client" {
 }
 
 resource "aws_instance" "prometheus" {
-  ami                    = "${var.ami}"
-  instance_type          = "${var.instance_types["prometheus"]}"
-  key_name               = "${aws_key_pair.auth.id}"
-  subnet_id              = "${aws_subnet.benchmark_subnet.id}"
+  ami                    = var.ami
+  instance_type          = var.instance_types["prometheus"]
+  key_name               = aws_key_pair.auth.id
+  subnet_id              = aws_subnet.benchmark_subnet.id
   vpc_security_group_ids = ["${aws_security_group.benchmark_security_group.id}"]
-  count                  = "${var.num_instances["prometheus"]}"
+  count                  = var.num_instances["prometheus"]
 
   tags = {
     Name = "prometheus-${count.index}"
@@ -224,5 +224,5 @@ output "zookeeper" {
 }
 
 output "prometheus_host" {
-  value = "${aws_instance.prometheus.0.public_ip}"
+  value = aws_instance.prometheus.0.public_ip
 }
