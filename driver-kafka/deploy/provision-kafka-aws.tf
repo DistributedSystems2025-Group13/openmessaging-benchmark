@@ -202,14 +202,14 @@ resource "aws_instance" "prometheus" {
   }
 }
 
-output "clients" {
+output "client" {
   value = {
     for instance in aws_instance.client :
     instance.public_ip => instance.private_ip
   }
 }
 
-output "brokers" {
+output "kafka" {
   value = {
     for instance in aws_instance.kafka :
     instance.public_ip => instance.private_ip
@@ -223,6 +223,32 @@ output "zookeeper" {
   }
 }
 
-output "prometheus_host" {
+output "prometheus" {
   value = aws_instance.prometheus.0.public_ip
+}
+
+resource "local_file" "ansible_inventory" {
+  content = <<EOT
+[kafka]
+%{ for i in aws_instance.kafka ~}
+${i.public_ip} ansible_user=ec2-user private_ip=${i.private_ip}
+%{ endfor ~}
+
+[zookeeper]
+%{ for i in aws_instance.zookeeper ~}
+${i.public_ip} ansible_user=ec2-user private_ip=${i.private_ip}
+%{ endfor ~}
+
+[client]
+%{ for i in aws_instance.client ~}
+${i.public_ip} ansible_user=ec2-user private_ip=${i.private_ip}
+%{ endfor ~}
+
+[prometheus]
+%{ for i in aws_instance.prometheus ~}
+${i.public_ip} ansible_user=ec2-user private_ip=${i.private_ip}
+%{ endfor ~}
+
+EOT
+  filename = "inventory.ini"
 }
