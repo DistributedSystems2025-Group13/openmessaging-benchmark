@@ -17,89 +17,6 @@
 # under the License.
 #
 
-- name: Collect profiles
-  hosts: kafka, client
-  become: true
-  tags:
-    - profile
-  tasks:
-    - set_fact:
-        time: "{{ ansible_date_time.epoch }}"
-    - name: Generate Flame graph
-      tags:
-        - flame
-      shell: |
-        /tmp/profiler.sh -d 120 `pidof java` -f /tmp/flame.svg
-    - name: Fetch flame graph
-      tags:
-        - flame
-      fetch:
-        src: /tmp/flame.svg
-        dest: results/{{ group_names[0] }}/{{ time }}/{{ inventory_hostname }}/flame.svg
-        flat: yes
-
-    # - name: Dump & compress heap
-    #   tags:
-    #     - heap
-    #   shell: |
-    #     jattach `pidof java` dumpheap /tmp/heap
-    #     chmod 777 /tmp/heap
-    #     tar -cvzf /tmp/heap.tar /tmp/heap
-    # - name: Fetch heap dump
-    #   tags:
-    #     - heap
-    #   fetch:
-    #     src: /tmp/heap.tar
-    #     dest: results/{{ group_names[0] }}/{{ time }}/{{ inventory_hostname }}/heap.tar
-    #     flat: yes
-
-    - name: Heap allocation profile
-      tags:
-        - heap
-      shell: |
-        /tmp/profiler.sh -d 60 -e alloc -o svg -f /tmp/heap.svg 1 `pidof java`
-        chmod 777 /tmp/heap.svg
-    - name: Fetch heap dump
-      tags:
-        - heap
-      fetch:
-        src: /tmp/heap.svg
-        dest: results/{{ group_names[0] }}/{{ time }}/{{ inventory_hostname }}/heap.svg
-        flat: yes
-
-- name: Format and mount disks for Kafka hosts
-  hosts: kafka
-  connection: ssh
-  become: true
-  tasks:
-    - command: >
-        tuned-adm profile latency-performance
-    - name: Format disks
-      filesystem:
-        fstype: xfs
-        dev: "{{ item }}"
-      with_items:
-        - "/dev/nvme1n1"
-        - "/dev/nvme2n1"
-    - name: Mount disks
-      mount:
-        path: "{{ item.path }}"
-        src: "{{ item.src }}"
-        fstype: xfs
-        opts: defaults,noatime,nodiscard
-        state: mounted
-      with_items:
-        - { path: "/mnt/data-1", src: "/dev/nvme1n1" }
-        - { path: "/mnt/data-2", src: "/dev/nvme2n1" }
-
-- name: Store server lists
-  hosts: all
-  connection: ssh
-  tasks:
-    - set_fact:
-        zookeeperServers: "{{ groups['zookeeper'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | map('regex_replace', '^(.*)$', '\\1:2181') | join(',') }}"
-        boostrapServers: "{{ groups['kafka'] | map('extract', hostvars, ['private_ip']) | map('regex_replace', '^(.*)$', '\\1:9092') | join(',') }}"
-
 - name: Setup common packages
   hosts: all
   connection: ssh
@@ -113,12 +30,47 @@
       yum: pkg={{ item }} state=latest
       with_items:
         - wget
-        - java-11
+        - java-25-openjdk-headless
         - sysstat
         - vim
         - chrony
         - git
         - gcc
+
+- name: Format and mount disks for Kafka hosts
+  hosts: kafka
+  connection: ssh
+  become: true
+  vars:
+    disks:
+      - dev: "/dev/nvme1n1"
+        path: "/mnt/data-1"
+      # - dev: "/dev/nvme1n1"
+      #   path: "/mnt/data-2"
+  tasks:
+    - command: >
+        tuned-adm profile latency-performance
+    - name: Format disks
+      filesystem:
+        fstype: xfs
+        dev: "{{ item.dev }}"
+      with_items: "{{ disks }}"
+    - name: Mount disks
+      mount:
+        path: "{{ item.path }}"
+        src: "{{ item.dev }}"
+        fstype: xfs
+        opts: defaults,noatime,nodiscard
+        state: mounted
+      with_items: "{{ disks }}"
+
+- name: Store server lists
+  hosts: all
+  connection: ssh
+  tasks:
+    - set_fact:
+        zookeeperServers: "{{ groups['zookeeper'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | map('regex_replace', '^(.*)$', '\\1:2181') | join(',') }}"
+        boostrapServers: "{{ groups['kafka'] | map('extract', hostvars, ['private_ip']) | map('regex_replace', '^(.*)$', '\\1:9092') | join(',') }}"
 
 - name: Kafka installation
   hosts: kafka, zookeeper
@@ -130,7 +82,7 @@
     - set_fact:
         zookeeperServers: "{{ groups['zookeeper'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | map('regex_replace', '^(.*)$', '\\1:2181') | join(',') }}"
         boostrapServers: "{{ groups['kafka'] | map('extract', hostvars, ['private_ip']) | map('regex_replace', '^(.*)$', '\\1:9092') | join(',') }}"
-        kafkaVersion: "2.6.0"
+        kafkaVersion: "4.1.1"
     - debug:
         msg: "zookeeper servers: {{ zookeeperServers }}\nboostrap servers: {{ boostrapServers }}"
 
@@ -227,11 +179,6 @@
         state: restarted
         daemon_reload: yes
         name: "kafka"
-    - git:
-        repo: "https://github.com/sysstat/sysstat"
-        dest: "/opt/sysstat"
-    - name: Compile and install sysstat from source
-      command: cd /opt/sysstat && ./configure && make -j`nproc` && sudo make install
 
 - name: Chrony setup
   hosts: client
@@ -303,32 +250,30 @@
         daemon_reload: yes
         name: "benchmark-worker"
 
-- name: Hosts addresses
-  hosts: localhost
-  become: false
-  tasks:
-    - debug:
-        msg: "Zookeeper servers {{ item }}"
-      with_items: "{{ groups['zookeeper'] }}"
-    - debug:
-        msg: "Kafka brokers {{ item }}"
-      with_items: "{{ groups['kafka'] }}"
-    - debug:
-        msg: "Benchmark clients {{ item }}"
-      with_items: "{{ groups['client'] }}"
-
 # Setup the Prometheus/Grafana monitoring stack
 - name: Prometheus installation
   hosts: prometheus
   connection: ssh
   become: true
   tasks:
-    - name: Add Extras Repo
-      shell: yum-config-manager --enable rhui-REGION-rhel-server-extras
+    # - name: Add Extras Repo
+    #   shell: yum-config-manager --enable rhui-REGION-rhel-server-extras
+    # - name: Install EPEL Release (Standard Extras)
+    - name: Add Docker CE repository
+      get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: '0644'
     - name: Install RPM packages
-      yum: pkg={{ item }} state=latest
-      with_items:
-        - docker
+      yum:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: latest
+      become: true
     - set_fact:
         prometheusVersion: "2.19.3"
     - file: path=/opt/prometheus state=absent
@@ -425,6 +370,20 @@
         state: started
         timeout: 5
 
+- name: Hosts addresses
+  hosts: localhost
+  become: false
+  tasks:
+    - debug:
+        msg: "Zookeeper servers {{ item }}"
+      with_items: "{{ groups['zookeeper'] }}"
+    - debug:
+        msg: "Kafka brokers {{ item }}"
+      with_items: "{{ groups['kafka'] }}"
+    - debug:
+        msg: "Benchmark clients {{ item }}"
+      with_items: "{{ groups['client'] }}"
+
 - name: Install jattach and async-profiler
   hosts: all
   become: true
@@ -440,3 +399,53 @@
         url: https://github.com/apangin/jattach/releases/download/v1.5/jattach
         dest: /usr/bin/jattach
         mode: "0755"
+
+    # - name: Dump & compress heap
+    #   tags:
+    #     - heap
+    #   shell: |
+    #     jattach `pidof java` dumpheap /tmp/heap
+    #     chmod 777 /tmp/heap
+    #     tar -cvzf /tmp/heap.tar /tmp/heap
+    # - name: Fetch heap dump
+    #   tags:
+    #     - heap
+    #   fetch:
+    #     src: /tmp/heap.tar
+    #     dest: results/{{ group_names[0] }}/{{ time }}/{{ inventory_hostname }}/heap.tar
+    #     flat: yes
+
+    - name: Heap allocation profile
+      tags:
+        - heap
+      shell: |
+        /tmp/profiler.sh -d 60 -e alloc -o svg -f /tmp/heap.svg 1 `pidof java`
+        chmod 777 /tmp/heap.svg
+    - name: Fetch heap dump
+      tags:
+        - heap
+      fetch:
+        src: /tmp/heap.svg
+        dest: results/{{ group_names[0] }}/{{ time }}/{{ inventory_hostname }}/heap.svg
+        flat: yes
+
+- name: Collect profiles
+  hosts: kafka, client
+  become: true
+  tags:
+    - profile
+  tasks:
+    - set_fact:
+        time: "{{ ansible_date_time.epoch }}"
+    - name: Generate flame graph
+      tags:
+        - flame
+      shell: |
+        /tmp/profiler.sh -d 120 `pidof java` -f /tmp/flame.svg
+    - name: Fetch flame graph
+      tags:
+        - flame
+      fetch:
+        src: /tmp/flame.svg
+        dest: results/{{ group_names[0] }}/{{ time }}/{{ inventory_hostname }}/flame.svg
+        flat: yes
