@@ -31,7 +31,7 @@
 	<artifactId>benchmark-framework</artifactId>
 
 	<properties>
-		<log4j.version>2.17.1</log4j.version>
+		<log4j.version>2.25.3</log4j.version>
 	</properties>
 
 	<dependencies>
@@ -89,7 +89,7 @@
 		<dependency>
 			<groupId>org.apache.pulsar</groupId>
 			<artifactId>pulsar-client-all</artifactId>
-			<version>2.6.0</version>
+			<version>4.1.2</version>
 		</dependency>
 
 		<dependency>
@@ -170,4 +170,54 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>native</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.buildtools</groupId>
+						<artifactId>native-maven-plugin</artifactId>
+						<version>0.11.3</version>
+						<extensions>true</extensions>
+						<configuration>
+							<buildArgs>
+								<buildArg>--no-fallback</buildArg>
+								<buildArg>--gc=G1</buildArg>
+							</buildArgs>
+							<metadataRepository>
+								<enabled>true</enabled>
+							</metadataRepository>
+						</configuration>
+						<executions>
+							<execution>
+								<id>build-benchmark-native</id>
+								<goals>
+									<goal>compile-no-fork</goal>
+								</goals>
+								<phase>package</phase>
+								<configuration>
+									<imageName>benchmark-native</imageName>
+									<mainClass>io.openmessaging.benchmark.Benchmark</mainClass>
+								</configuration>
+							</execution>
+							<execution>
+								<id>build-benchmark-worker-native</id>
+								<goals>
+									<goal>compile-no-fork</goal>
+								</goals>
+								<phase>package</phase>
+								<configuration>
+									<imageName>benchmark-worker-native</imageName>
+									<mainClass>io.openmessaging.benchmark.worker.BenchmarkWorker</mainClass>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+
 </project>

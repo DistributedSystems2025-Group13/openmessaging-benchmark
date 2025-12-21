@@ -43,7 +43,6 @@
 			<version>${project.version}</version>
 		</dependency>
 
-		<!-- TODO: Change Kafka version -->
 		<dependency>
 			<groupId>org.apache.kafka</groupId>
 			<artifactId>kafka-clients</artifactId>

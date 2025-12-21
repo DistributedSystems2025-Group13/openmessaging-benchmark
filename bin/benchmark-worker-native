@@ -1,0 +1,12 @@
+#!/bin/bash
+
+BINARY=benchmark-framework/target/benchmark-worker-native
+
+if [ ! -f "$BINARY" ]; then
+    echo "Error: Native binary not found at $BINARY"
+    exit 1
+fi
+
+JVM_MEM="-Xms4G -Xmx8G"
+
+exec $BINARY $JVM_MEM $*

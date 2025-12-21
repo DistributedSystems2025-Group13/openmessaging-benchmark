@@ -1,0 +1,14 @@
+#!/bin/bash
+
+BINARY=benchmark-framework/target/benchmark-native
+
+if [ ! -f "$BINARY" ]; then
+    echo "Error: Native binary not found at $BINARY"
+    echo "Did you run: mvn clean package -Pnative ?"
+    exit 1
+fi
+
+JVM_MEM="-Xms4G -Xmx4G"
+GC_FLAGS="-XX:+PrintGC"
+
+exec $BINARY $JVM_MEM $GC_FLAGS $*
