@@ -152,7 +152,8 @@ public class Benchmark {
 
                     TestResult result = generator.run();
 
-                    String fileName = arguments.output.length() > 0 ? arguments.output
+                    String fileName = (arguments.output != null && !arguments.output.isEmpty()) 
+                            ? arguments.output
                             : String.format("%s-%s-%s.json", workloadName, driverConfiguration.name,
                                     dateFormat.format(new Date()));
 
